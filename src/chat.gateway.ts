@@ -33,4 +33,20 @@ export class ChatGateway {
       message: data.message,
     });
   }
+
+  @SubscribeMessage('typing')
+  handleTyping(
+    @MessageBody() data: { room: string; username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.to(data.room).emit('typing', { username: data.username });
+  }
+
+  @SubscribeMessage('stopTyping')
+  handleStopTyping(
+    @MessageBody() data: { room: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.to(data.room).emit('stopTyping');
+  }
 }

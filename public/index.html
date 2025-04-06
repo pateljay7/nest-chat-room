@@ -14,10 +14,12 @@
         margin: 0;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background-color: #ece5dd;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
       }
 
-      #login,
-      #chat {
+      #login {
         width: 90%;
         max-width: 500px;
         margin: 50px auto;
@@ -53,12 +55,13 @@
 
       #chat {
         display: none;
-        height: 90vh;
-        margin: auto;
-        display: flex;
+        flex: 1;
+        width: 100vw;
+        margin: 0;
         flex-direction: column;
         background-color: #f0f0f0;
         border-radius: 0;
+        position: relative;
       }
 
       #chatHeader {
@@ -67,8 +70,6 @@
         padding: 15px;
         font-size: 18px;
         font-weight: bold;
-        border-top-left-radius: 8px;
-        border-top-right-radius: 8px;
         text-align: center;
       }
 
@@ -79,6 +80,7 @@
         overflow-y: auto;
         padding: 20px;
         background-color: #ece5dd;
+        margin-bottom: 70px; /* space for sticky input */
       }
 
       .message {
@@ -137,9 +139,28 @@
         border-top: 1px solid #ccc;
         gap: 10px;
         flex-wrap: wrap;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        z-index: 10;
+        flex-direction: column;
       }
 
-      #inputBar input {
+      #typingIndicator {
+        font-style: italic;
+        color: gray;
+        text-align: left;
+        padding: 0 10px 5px 10px;
+      }
+
+      #inputRow {
+        display: flex;
+        width: 100%;
+        gap: 10px;
+      }
+
+      #inputRow input {
         flex: 1 1 70%;
         padding: 12px;
         border: 1px solid #ccc;
@@ -148,7 +169,7 @@
         font-size: 16px;
       }
 
-      #inputBar button {
+      #inputRow button {
         flex: 1 1 25%;
         background-color: #25d366;
         border: none;
@@ -159,7 +180,7 @@
         font-size: 16px;
       }
 
-      #inputBar button:hover {
+      #inputRow button:hover {
         background-color: #1ebe5d;
       }
 
@@ -173,8 +194,8 @@
           font-size: 13px;
         }
 
-        #inputBar input,
-        #inputBar button {
+        #inputRow input,
+        #inputRow button {
           font-size: 14px;
           padding: 10px;
         }
@@ -193,8 +214,11 @@
       <div id="chatHeader">Chat Room</div>
       <div id="messages"></div>
       <div id="inputBar">
-        <input id="message" placeholder="Type a message" />
-        <button onclick="sendMessage()">Send</button>
+        <div id="typingIndicator"></div>
+        <div id="inputRow">
+          <input id="message" placeholder="Type a message" />
+          <button onclick="sendMessage()">Send</button>
+        </div>
       </div>
     </div>
 
@@ -202,7 +226,7 @@
       const socket = io(
         window.location.hostname === 'localhost'
           ? 'http://localhost:3000'
-          : 'https://nest-chat-room.onrender.com',
+          : 'https://nest-chat-room.onrender.com'
       );
       let username, room;
 
@@ -221,17 +245,16 @@
         if (message) {
           socket.emit('sendMessage', { room, username, message });
           document.getElementById('message').value = '';
+          
         }
       }
 
-      document
-        .getElementById('message')
-        .addEventListener('keypress', function (e) {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            sendMessage();
-          }
-        });
+      document.getElementById('message').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
 
       socket.on('message', (data) => {
         const messages = document.getElementById('messages');
@@ -262,6 +285,28 @@
 
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
+      });
+
+      socket.on('typing', (data) => {
+        const typingIndicator = document.getElementById('typingIndicator');
+        typingIndicator.textContent = `${data.username} is typing...`;
+        typingIndicator.style.display = 'block';
+      });
+
+      socket.on('stopTyping', () => {
+        const typingIndicator = document.getElementById('typingIndicator');
+        typingIndicator.style.display = 'none';
+      });
+
+      let typingTimeout;
+      const messageInput = document.getElementById('message');
+
+      messageInput.addEventListener('input', () => {
+        socket.emit('typing', { room, username });
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+          socket.emit('stopTyping', { room });
+        }, 2000);
       });
     </script>
   </body>
