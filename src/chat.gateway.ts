@@ -1,3 +1,5 @@
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -12,12 +14,26 @@ export class ChatGateway {
   @WebSocketServer()
   server: Server;
 
+  constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
+
   @SubscribeMessage('joinRoom')
-  handleJoinRoom(
+  async handleJoinRoom(
     @MessageBody() data: { username: string; room: string },
     @ConnectedSocket() client: Socket,
   ) {
     client.join(data.room);
+
+    const users =
+      (await this.cacheManager.get<string[]>(`room:${data.room}:users`)) || [];
+    if (!users.includes(data.username)) {
+      users.push(data.username);
+      await this.cacheManager.set(`room:${data.room}:$users`, users);
+    }
+    const messages =
+      (await this.cacheManager.get<{ username: string; message: string }[]>(
+        `room:${data.room}:messages`,
+      )) || [];
+    client.emit('previousMessages', messages);
     this.server.to(data.room).emit('message', {
       username: 'System',
       message: `${data.username} has joined the room.`,
@@ -25,13 +41,21 @@ export class ChatGateway {
   }
 
   @SubscribeMessage('sendMessage')
-  handleMessage(
+  async handleMessage(
     @MessageBody() data: { room: string; username: string; message: string },
   ) {
-    this.server.to(data.room).emit('message', {
+    const message = {
       username: data.username,
       message: data.message,
-    });
+    };
+    this.server.to(data.room).emit('message', message);
+
+    const messages =
+      (await this.cacheManager.get<{ username: string; message: string }[]>(
+        `room:${data.room}:messages`,
+      )) || [];
+    messages.push(message);
+    await this.cacheManager.set(`room:${data.room}:messages`, messages);
   }
 
   @SubscribeMessage('typing')

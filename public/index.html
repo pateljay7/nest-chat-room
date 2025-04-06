@@ -226,35 +226,67 @@
       const socket = io(
         window.location.hostname === 'localhost'
           ? 'http://localhost:3000'
-          : 'https://nest-chat-room.onrender.com'
+          : 'https://nest-chat-room.onrender.com',
       );
       let username, room;
 
       function joinRoom() {
         username = document.getElementById('username').value;
         room = document.getElementById('room').value;
+
         if (!username || !room) return alert('Please enter both fields');
+
         socket.emit('joinRoom', { username, room });
+
         document.getElementById('login').style.display = 'none';
         document.getElementById('chat').style.display = 'flex';
+
         document.getElementById('chatHeader').textContent = `Room: ${room}`;
       }
+
+      socket.on('previousMessages', (messages) => {
+        const messagesContainer = document.getElementById('messages');
+        messages.forEach((msg) => {
+          const messageElement = document.createElement('div');
+          const usernameDiv = document.createElement('div');
+          const textDiv = document.createElement('div');
+
+          usernameDiv.className = 'msg-username';
+          usernameDiv.textContent = msg.username;
+          textDiv.className = 'msg-text';
+          textDiv.textContent = msg.message;
+
+          messageElement.appendChild(usernameDiv);
+          messageElement.appendChild(textDiv);
+
+          if (msg.username === username) {
+            messageElement.className = 'message user';
+          } else {
+            messageElement.className = 'message other';
+          }
+
+          messagesContainer.appendChild(messageElement);
+        });
+
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      });
 
       function sendMessage() {
         const message = document.getElementById('message').value.trim();
         if (message) {
           socket.emit('sendMessage', { room, username, message });
           document.getElementById('message').value = '';
-          
         }
       }
 
-      document.getElementById('message').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
+      document
+        .getElementById('message')
+        .addEventListener('keypress', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            sendMessage();
+          }
+        });
 
       socket.on('message', (data) => {
         const messages = document.getElementById('messages');
