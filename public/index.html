@@ -148,10 +148,16 @@
       }
 
       #typingIndicator {
+        position: fixed;
+        bottom: 70px; /* height of input bar */
+        left: 0;
+        width: 100%;
         font-style: italic;
         color: gray;
         text-align: left;
-        padding: 0 10px 5px 10px;
+        padding: 0 15px 5px 15px;
+        background-color: #f0f0f0;
+        z-index: 9;
       }
 
       #inputRow {
@@ -213,8 +219,8 @@
     <div id="chat">
       <div id="chatHeader">Chat Room</div>
       <div id="messages"></div>
+      <div id="typingIndicator"></div>
       <div id="inputBar">
-        <div id="typingIndicator"></div>
         <div id="inputRow">
           <input id="message" placeholder="Type a message" />
           <button onclick="sendMessage()">Send</button>
