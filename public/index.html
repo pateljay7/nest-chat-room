@@ -70,7 +70,28 @@
         padding: 15px;
         font-size: 18px;
         font-weight: bold;
-        text-align: center;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      #chatHeader span {
+        flex-grow: 1;
+      }
+
+      #videoCallButton {
+        background-color: #25d366;
+        border: none;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s ease;
+      }
+
+      #videoCallButton:hover {
+        background-color: #1ebe5d;
       }
 
       #messages {
@@ -217,7 +238,13 @@
     </div>
 
     <div id="chat">
-      <div id="chatHeader">Chat Room</div>
+      <div id="chatHeader">
+        <span id="chat-header-title"></span>
+        <button id="videoCallButton" onclick="startVideoCall()">
+          Video Call
+        </button>
+      </div>
+
       <div id="messages"></div>
       <div id="typingIndicator"></div>
       <div id="inputBar">
@@ -226,6 +253,13 @@
           <button onclick="sendMessage()">Send</button>
         </div>
       </div>
+    </div>
+    <div id="videoCallScreen" style="display: none">
+      <div id="videoContainer">
+        <video id="localVideo" autoplay muted></video>
+        <div id="remoteVideos"></div>
+      </div>
+      <button id="endCallButton" onclick="endVideoCall()">End Call</button>
     </div>
 
     <script>
@@ -236,6 +270,11 @@
       );
       let username, room;
 
+      let localStream;
+      let peerConnections = {};
+      const iceServers = {
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], // Public STUN server
+      };
       function joinRoom() {
         username = document.getElementById('username').value;
         room = document.getElementById('room').value;
@@ -247,7 +286,8 @@
         document.getElementById('login').style.display = 'none';
         document.getElementById('chat').style.display = 'flex';
 
-        document.getElementById('chatHeader').textContent = `Room: ${room}`;
+        document.getElementById('chat-header-title').textContent =
+          `Room: ${room}`;
       }
 
       socket.on('previousMessages', (messages) => {
@@ -345,6 +385,138 @@
         typingTimeout = setTimeout(() => {
           socket.emit('stopTyping', { room });
         }, 2000);
+      });
+
+      function startVideoCall() {
+        document.getElementById('videoCallScreen').style.display = 'block';
+        document.getElementById('chat').style.display = 'none';
+
+        navigator.mediaDevices
+          .getUserMedia({ video: true, audio: true })
+          .then((stream) => {
+            localStream = stream;
+            document.getElementById('localVideo').srcObject = stream;
+
+            socket.emit('startVideoCall', { room });
+
+            // Add local stream to peer connections
+            socket.on('userJoinedCall', (userId) => {
+              const peerConnection = new RTCPeerConnection(iceServers);
+              peerConnections[userId] = peerConnection;
+
+              // Add local stream tracks to peer connection
+              localStream.getTracks().forEach((track) => {
+                peerConnection.addTrack(track, localStream);
+              });
+
+              // Handle ICE candidates
+              peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                  socket.emit('iceCandidate', {
+                    candidate: event.candidate,
+                    to: userId,
+                  });
+                }
+              };
+
+              // Handle remote stream
+              peerConnection.ontrack = (event) => {
+                const remoteVideo = document.createElement('video');
+                remoteVideo.srcObject = event.streams[0];
+                remoteVideo.autoplay = true;
+                document
+                  .getElementById('remoteVideos')
+                  .appendChild(remoteVideo);
+              };
+
+              // Create and send offer
+              peerConnection.createOffer().then((offer) => {
+                peerConnection.setLocalDescription(offer);
+                socket.emit('offer', { offer, to: userId });
+              });
+            });
+
+            // Handle incoming offers
+            socket.on('offer', ({ offer, from }) => {
+              const peerConnection = new RTCPeerConnection(iceServers);
+              peerConnections[from] = peerConnection;
+
+              // Add local stream tracks to peer connection
+              localStream.getTracks().forEach((track) => {
+                peerConnection.addTrack(track, localStream);
+              });
+
+              // Handle ICE candidates
+              peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                  socket.emit('iceCandidate', {
+                    candidate: event.candidate,
+                    to: from,
+                  });
+                }
+              };
+
+              // Handle remote stream
+              peerConnection.ontrack = (event) => {
+                const remoteVideo = document.createElement('video');
+                remoteVideo.srcObject = event.streams[0];
+                remoteVideo.autoplay = true;
+                document
+                  .getElementById('remoteVideos')
+                  .appendChild(remoteVideo);
+              };
+
+              // Set remote description and create answer
+              peerConnection
+                .setRemoteDescription(new RTCSessionDescription(offer))
+                .then(() => {
+                  peerConnection.createAnswer().then((answer) => {
+                    peerConnection.setLocalDescription(answer);
+                    socket.emit('answer', { answer, to: from });
+                  });
+                });
+            });
+
+            // Handle incoming answers
+            socket.on('answer', ({ answer, from }) => {
+              peerConnections[from].setRemoteDescription(
+                new RTCSessionDescription(answer),
+              );
+            });
+
+            // Handle incoming ICE candidates
+            socket.on('iceCandidate', ({ candidate, from }) => {
+              peerConnections[from].addIceCandidate(
+                new RTCIceCandidate(candidate),
+              );
+            });
+          })
+          .catch((error) => {
+            console.error('Error accessing media devices:', error);
+          });
+      }
+
+      function endVideoCall() {
+        document.getElementById('videoCallScreen').style.display = 'none';
+        document.getElementById('chat').style.display = 'flex';
+
+        // Close all peer connections
+        Object.values(peerConnections).forEach((peerConnection) =>
+          peerConnection.close(),
+        );
+        peerConnections = {};
+
+        // Stop local stream
+        localStream.getTracks().forEach((track) => track.stop());
+        localStream = null;
+
+        socket.emit('endVideoCall', { room });
+      }
+      socket.on('userLeftCall', (userId) => {
+        if (peerConnections[userId]) {
+          peerConnections[userId].close();
+          delete peerConnections[userId];
+        }
       });
     </script>
   </body>

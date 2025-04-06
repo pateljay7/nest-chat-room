@@ -108,4 +108,50 @@ export class ChatGateway {
       message,
     });
   }
+
+  @SubscribeMessage('startVideoCall')
+  handleStartVideoCall(
+    @MessageBody() data: { room: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.to(data.room).emit('userJoinedCall', client.id);
+  }
+
+  @SubscribeMessage('offer')
+  handleOffer(
+    @MessageBody() data: { offer: RTCSessionDescriptionInit; to: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    this.server
+      .to(data.to)
+      .emit('offer', { offer: data.offer, from: client.id });
+  }
+
+  @SubscribeMessage('answer')
+  handleAnswer(
+    @MessageBody() data: { answer: RTCSessionDescriptionInit; to: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    this.server
+      .to(data.to)
+      .emit('answer', { answer: data.answer, from: client.id });
+  }
+
+  @SubscribeMessage('iceCandidate')
+  handleIceCandidate(
+    @MessageBody() data: { candidate: RTCIceCandidate; to: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    this.server
+      .to(data.to)
+      .emit('iceCandidate', { candidate: data.candidate, from: client.id });
+  }
+
+  @SubscribeMessage('endVideoCall')
+  handleEndVideoCall(
+    @MessageBody() data: { room: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.to(data.room).emit('userLeftCall', client.id);
+  }
 }
