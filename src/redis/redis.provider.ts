@@ -5,10 +5,15 @@ import Redis from 'ioredis';
 export const RedisProvider: Provider = {
   provide: 'REDIS_CLIENT',
   useFactory: () => {
-    console.log('REDIS_HOST', process.env.REDIS_HOST);
-    return new Redis({
-      host: process.env.REDIS_HOST,
-      port: 6379,
+    const redisUrl = process.env.REDIS_HOST;
+
+    const redis = new Redis(redisUrl, {
+      tls: {}, // Enables SSL connection (required for rediss://)
     });
+
+    redis.on('connect', () => console.log('✅ Redis connected'));
+    redis.on('error', (err) => console.error('❌ Redis error:', err));
+
+    return redis;
   },
 };
