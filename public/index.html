@@ -199,7 +199,11 @@
     </div>
 
     <script>
-      const socket = io('http://localhost:3000');
+      const socket = io(
+        window.location.hostname === 'localhost'
+          ? 'http://localhost:3000'
+          : 'https://nest-chat-room.onrender.com',
+      );
       let username, room;
 
       function joinRoom() {
@@ -220,12 +224,14 @@
         }
       }
 
-      document.getElementById('message').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
+      document
+        .getElementById('message')
+        .addEventListener('keypress', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            sendMessage();
+          }
+        });
 
       socket.on('message', (data) => {
         const messages = document.getElementById('messages');
